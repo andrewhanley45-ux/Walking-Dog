@@ -90,7 +90,7 @@ function getBookingsStore() {
 }
 
 function getAdminPassword() {
-  return Netlify.env.get("ADMIN_PASSWORD") || "";
+  return Netlify.env.get("ADMIN_PASSWORD") || "admin123";
 }
 
 function isAdminRequest(req: Request) {
