@@ -17,8 +17,8 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
-const STORAGE_KEY = "walking-paw-bookings-v1";
-const ADMIN_PASSWORD = "admin123";
+const BOOKINGS_API = "/api/bookings";
+const ADMIN_PASSWORD_SESSION_KEY = "walking-paw-admin-password";
 
 const serviceSchedule = {
   Monday: {
@@ -117,12 +117,62 @@ function isAdminPath() {
   return window.location.pathname.replace(/\/$/, "") === "/admin";
 }
 
-function readBookings() {
+async function readApiResponse(response) {
+  let data = null;
   try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+    data = await response.json();
   } catch {
-    return [];
+    data = null;
   }
+
+  if (!response.ok) {
+    const error = new Error(data?.error || "The shared booking service is unavailable right now.");
+    error.status = response.status;
+    throw error;
+  }
+
+  return data;
+}
+
+async function createSharedBooking(booking) {
+  const data = await readApiResponse(
+    await fetch(BOOKINGS_API, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(booking)
+    })
+  );
+  return data.booking;
+}
+
+async function fetchSharedBookings(password) {
+  const data = await readApiResponse(
+    await fetch(BOOKINGS_API, {
+      cache: "no-store",
+      headers: { "x-admin-password": password }
+    })
+  );
+  return data.bookings || [];
+}
+
+async function deleteSharedBooking(id, password) {
+  const data = await readApiResponse(
+    await fetch(`${BOOKINGS_API}?id=${encodeURIComponent(id)}`, {
+      method: "DELETE",
+      headers: { "x-admin-password": password }
+    })
+  );
+  return data.bookings || [];
+}
+
+async function clearSharedBookings(password) {
+  const data = await readApiResponse(
+    await fetch(BOOKINGS_API, {
+      method: "DELETE",
+      headers: { "x-admin-password": password }
+    })
+  );
+  return data.bookings || [];
 }
 
 function minutesFromTime(timeValue) {
@@ -163,9 +213,14 @@ function App() {
   const [adminSite, setAdminSite] = useState(isAdminPath);
   const [activePage, setActivePage] = useState(getPageFromHash);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [bookings, setBookings] = useState(readBookings);
+  const [bookings, setBookings] = useState([]);
+  const [bookingsLoading, setBookingsLoading] = useState(false);
+  const [bookingsError, setBookingsError] = useState("");
   const [latestBookingId, setLatestBookingId] = useState("");
   const [latestBooking, setLatestBooking] = useState(null);
+  const [adminPassword, setAdminPassword] = useState(
+    () => sessionStorage.getItem(ADMIN_PASSWORD_SESSION_KEY) || ""
+  );
 
   useEffect(() => {
     const onHashChange = () => {
@@ -184,18 +239,37 @@ function App() {
   }, []);
 
   useEffect(() => {
-    const onStorage = (event) => {
-      if (event.key === STORAGE_KEY) {
-        setBookings(readBookings());
-      }
-    };
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
-  }, []);
+    if (!adminSite || !adminPassword) return undefined;
 
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(bookings));
-  }, [bookings]);
+    let cancelled = false;
+    setBookingsLoading(true);
+    setBookingsError("");
+
+    fetchSharedBookings(adminPassword)
+      .then((sharedBookings) => {
+        if (!cancelled) {
+          setBookings(sharedBookings);
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setBookingsError(error.message);
+          if (error.status === 401) {
+            sessionStorage.removeItem(ADMIN_PASSWORD_SESSION_KEY);
+            setAdminPassword("");
+          }
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setBookingsLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [adminSite, adminPassword]);
 
   function navigate(page) {
     window.location.hash = page;
@@ -203,28 +277,68 @@ function App() {
     setMenuOpen(false);
   }
 
-  function addBooking(booking) {
-    const savedBooking = {
-      ...booking,
-      id: crypto.randomUUID(),
-      createdAt: new Date().toISOString(),
-      status: "Booked"
-    };
+  async function addBooking(booking) {
+    const savedBooking = await createSharedBooking(booking);
     setBookings((current) => [savedBooking, ...current]);
     setLatestBookingId(savedBooking.id);
     setLatestBooking(savedBooking);
     navigate("thanks");
   }
 
-  function deleteBooking(id) {
-    setBookings((current) => current.filter((booking) => booking.id !== id));
+  async function loginAdmin(password) {
+    setBookingsLoading(true);
+    setBookingsError("");
+    try {
+      const sharedBookings = await fetchSharedBookings(password);
+      sessionStorage.setItem(ADMIN_PASSWORD_SESSION_KEY, password);
+      setAdminPassword(password);
+      setBookings(sharedBookings);
+    } catch (error) {
+      setBookingsError(error.message);
+      throw error;
+    } finally {
+      setBookingsLoading(false);
+    }
   }
 
-  function clearBookings() {
+  function logoutAdmin() {
+    sessionStorage.removeItem(ADMIN_PASSWORD_SESSION_KEY);
+    setAdminPassword("");
+    setBookings([]);
+    setBookingsError("");
+    setLatestBookingId("");
+  }
+
+  async function deleteBooking(id) {
+    if (!adminPassword) return;
+    setBookingsLoading(true);
+    setBookingsError("");
+    try {
+      setBookings(await deleteSharedBooking(id, adminPassword));
+      if (id === latestBookingId) {
+        setLatestBookingId("");
+      }
+    } catch (error) {
+      setBookingsError(error.message);
+    } finally {
+      setBookingsLoading(false);
+    }
+  }
+
+  async function clearBookings() {
+    if (!adminPassword) return;
     const shouldClear = window.confirm("Clear every saved Walking Paw booking?");
     if (shouldClear) {
-      setBookings([]);
-      setLatestBookingId("");
+      setBookingsLoading(true);
+      setBookingsError("");
+      try {
+        setBookings(await clearSharedBookings(adminPassword));
+        setLatestBookingId("");
+      } catch (error) {
+        setBookingsError(error.message);
+      } finally {
+        setBookingsLoading(false);
+      }
     }
   }
 
@@ -281,10 +395,15 @@ function App() {
     return (
       <AdminSite
         bookings={bookings}
+        bookingsError={bookingsError}
+        isAuthed={Boolean(adminPassword)}
+        isLoading={bookingsLoading}
         latestBookingId={latestBookingId}
         onClear={clearBookings}
         onDelete={deleteBooking}
         onDownload={downloadCsv}
+        onLogin={loginAdmin}
+        onLogout={logoutAdmin}
       />
     );
   }
@@ -449,6 +568,7 @@ function BookPage({ onSubmit }) {
 function BookingForm({ onSubmit, compact = false }) {
   const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
   const selectedDay = getDayName(form.date);
   const selectedWindow = serviceSchedule[selectedDay];
   const price = priceBySize[form.dogSize];
@@ -470,7 +590,7 @@ function BookingForm({ onSubmit, compact = false }) {
     });
   }
 
-  function submitForm(event) {
+  async function submitForm(event) {
     event.preventDefault();
     const pickupError = validatePickupTime(selectedDay, form.time);
     const missingField = [
@@ -494,17 +614,24 @@ function BookingForm({ onSubmit, compact = false }) {
       return;
     }
 
-    onSubmit({
-      ...form,
-      price,
-      day: selectedDay,
-      pickupWindow: selectedWindow.pickupWindow,
-      serviceWindow: selectedWindow.display,
-      rawTime: form.time,
-      time: formatPickupTime(form.time),
-      dogSizeLabel
-    });
-    setForm(emptyForm);
+    setSaving(true);
+    try {
+      await onSubmit({
+        ...form,
+        price,
+        day: selectedDay,
+        pickupWindow: selectedWindow.pickupWindow,
+        serviceWindow: selectedWindow.display,
+        rawTime: form.time,
+        time: formatPickupTime(form.time),
+        dogSizeLabel
+      });
+      setForm(emptyForm);
+    } catch (saveError) {
+      setError(saveError.message || "Could not save this booking. Please try again.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -650,9 +777,9 @@ function BookingForm({ onSubmit, compact = false }) {
 
       {error && <p className="form-error">{error}</p>}
 
-      <button className="primary-button submit-button" type="submit">
+      <button className="primary-button submit-button" type="submit" disabled={saving}>
         <CheckCircle2 size={20} />
-        Save Booking
+        {saving ? "Saving Booking" : "Save Booking"}
       </button>
     </form>
   );
@@ -687,27 +814,37 @@ function ConfirmationPage({ booking, onBookAnother }) {
   );
 }
 
-function AdminSite({ bookings, latestBookingId, onDelete, onClear, onDownload }) {
+function AdminSite({
+  bookings,
+  bookingsError,
+  isAuthed,
+  isLoading,
+  latestBookingId,
+  onDelete,
+  onClear,
+  onDownload,
+  onLogin,
+  onLogout
+}) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  const [isAuthed, setIsAuthed] = useState(
-    () => sessionStorage.getItem("walking-paw-admin-auth") === "true"
-  );
+  const [submitting, setSubmitting] = useState(false);
 
-  function submitPassword(event) {
+  async function submitPassword(event) {
     event.preventDefault();
-    if (password === ADMIN_PASSWORD) {
-      sessionStorage.setItem("walking-paw-admin-auth", "true");
-      setIsAuthed(true);
+    setSubmitting(true);
+    try {
+      await onLogin(password);
       setError("");
-      return;
+    } catch (loginError) {
+      setError(loginError.message || "Wrong password. Workers and bosses should use the correct login password.");
+    } finally {
+      setSubmitting(false);
     }
-    setError("Wrong password. Workers and bosses should use the correct login password.");
   }
 
   function logout() {
-    sessionStorage.removeItem("walking-paw-admin-auth");
-    setIsAuthed(false);
+    onLogout();
     setPassword("");
   }
 
@@ -742,9 +879,9 @@ function AdminSite({ bookings, latestBookingId, onDelete, onClear, onDownload })
             />
           </label>
           {error && <p className="form-error">{error}</p>}
-          <button className="primary-button submit-button" type="submit">
+          <button className="primary-button submit-button" type="submit" disabled={submitting}>
             <LockKeyhole size={20} />
-            Log In
+            {submitting ? "Checking" : "Log In"}
           </button>
           <a className="login-back" href="/">
             Back to public booking site
@@ -781,6 +918,8 @@ function AdminSite({ bookings, latestBookingId, onDelete, onClear, onDownload })
         <BookingsPage
           admin
           bookings={bookings}
+          bookingsError={bookingsError}
+          isLoading={isLoading}
           latestBookingId={latestBookingId}
           onBookNow={() => {
             window.location.href = "/#book";
@@ -796,6 +935,8 @@ function AdminSite({ bookings, latestBookingId, onDelete, onClear, onDownload })
 
 function BookingsPage({
   bookings,
+  bookingsError = "",
+  isLoading = false,
   latestBookingId,
   onBookNow,
   onDelete,
@@ -839,18 +980,26 @@ function BookingsPage({
       </div>
 
       <div className="booking-actions">
-        <button className="secondary-button" type="button" onClick={onDownload} disabled={!bookings.length}>
+        <button className="secondary-button" type="button" onClick={onDownload} disabled={!bookings.length || isLoading}>
           <Download size={18} />
           Export CSV
         </button>
-        <button className="ghost-danger" type="button" onClick={onClear} disabled={!bookings.length}>
+        <button className="ghost-danger" type="button" onClick={onClear} disabled={!bookings.length || isLoading}>
           <Trash2 size={18} />
           Clear All
         </button>
       </div>
 
+      {bookingsError && <p className="form-error admin-error">{bookingsError}</p>}
+
       <div className="bookings-table-wrap">
-        {bookings.length ? (
+        {isLoading ? (
+          <div className="empty-state">
+            <ClipboardList size={44} aria-hidden="true" />
+            <h2>Loading bookings</h2>
+            <p>Checking the shared Walking Paw booking list.</p>
+          </div>
+        ) : bookings.length ? (
           <table className="bookings-table">
             <thead>
               <tr>
@@ -899,6 +1048,7 @@ function BookingsPage({
                     <button
                       className="icon-button danger-icon"
                       type="button"
+                      disabled={isLoading}
                       onClick={() => onDelete(booking.id)}
                     >
                       <Trash2 size={18} />

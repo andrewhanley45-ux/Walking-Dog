@@ -1,6 +1,7 @@
 node_modules/
 dist/
 .netlify/
+.netlify-functions-build/
 __pycache__/
 *.pyc
 design/qa-*.png
