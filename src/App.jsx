@@ -416,6 +416,7 @@ function App() {
         onMenuToggle={() => setMenuOpen((open) => !open)}
         onNavigate={navigate}
       />
+      <CashOnlyBanner />
 
       <main>
         {activePage === "home" && (
@@ -434,6 +435,14 @@ function App() {
 
       <SiteFooter onNavigate={navigate} />
     </div>
+  );
+}
+
+function CashOnlyBanner() {
+  return (
+    <aside className="cash-only-banner" aria-label="Payment notice">
+      Cash Only
+    </aside>
   );
 }
 
