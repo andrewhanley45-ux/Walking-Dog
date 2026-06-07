@@ -496,7 +496,7 @@ function HomePage({ onBookNow, onSubmit }) {
             Beaumont Park and the Beaumont side of Lexington, Kentucky only.
           </p>
           <div className="hero-actions">
-            <a className="secondary-button" href="tel:8594773857">
+            <a className="secondary-button" href="tel:8594473857">
               <Phone size={19} />
               Call Workers
             </a>
@@ -1196,7 +1196,7 @@ function SiteFooter({ onNavigate }) {
         <span>Beaumont Park in Lexington, Kentucky only</span>
       </div>
       <div className="footer-links">
-        <a href="tel:8594773857">Workers: (859) 477-3857</a>
+        <a href="tel:8594473857">Workers: (859) 447-3857</a>
         <a href="tel:8592377087">Bosses: (859) 237-7087</a>
         <a href="/admin">Worker/Boss Login</a>
         <button type="button" onClick={() => onNavigate("policies")}>
