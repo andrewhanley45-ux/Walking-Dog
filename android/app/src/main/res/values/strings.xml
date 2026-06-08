@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Walking Paw</string>
+    <string name="title_activity_main">Walking Paw</string>
+    <string name="package_name">com.walkingpaw.service</string>
+    <string name="custom_url_scheme">com.walkingpaw.service</string>
+</resources>

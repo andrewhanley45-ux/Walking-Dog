@@ -34,6 +34,12 @@ declare const Netlify: {
 
 const STORE_NAME = "walking-paw-bookings";
 const BOOKING_PREFIX = "booking-";
+const ALLOWED_ORIGINS = new Set([
+  "https://walking-paw.netlify.app",
+  "https://localhost",
+  "http://localhost",
+  "capacitor://localhost"
+]);
 
 const serviceSchedule: Record<
   string,
@@ -81,8 +87,24 @@ const priceBySize = {
   big: 10
 } as const;
 
-function json(data: unknown, status = 200) {
-  return Response.json(data, { status });
+function corsHeaders(req: Request) {
+  const origin = req.headers.get("origin") || "";
+  if (!ALLOWED_ORIGINS.has(origin)) return {};
+
+  return {
+    "Access-Control-Allow-Origin": origin,
+    "Access-Control-Allow-Headers": "content-type, x-admin-password",
+    "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
+    "Vary": "Origin"
+  };
+}
+
+function json(req: Request, data: unknown, status = 200) {
+  return Response.json(data, { status, headers: corsHeaders(req) });
+}
+
+function empty(req: Request, status = 204) {
+  return new Response(null, { status, headers: corsHeaders(req) });
 }
 
 function getBookingsStore() {
@@ -229,18 +251,22 @@ async function clearBookings() {
 
 export default async (req: Request, _context: Context) => {
   try {
+    if (req.method === "OPTIONS") {
+      return empty(req);
+    }
+
     if (req.method === "POST") {
       const booking = await saveBooking(await req.json());
-      return json({ booking }, 201);
+      return json(req, { booking }, 201);
     }
 
     if (req.method === "GET") {
-      if (!isAdminRequest(req)) return json({ error: "Wrong admin password." }, 401);
-      return json({ bookings: await listBookings() });
+      if (!isAdminRequest(req)) return json(req, { error: "Wrong admin password." }, 401);
+      return json(req, { bookings: await listBookings() });
     }
 
     if (req.method === "DELETE") {
-      if (!isAdminRequest(req)) return json({ error: "Wrong admin password." }, 401);
+      if (!isAdminRequest(req)) return json(req, { error: "Wrong admin password." }, 401);
       const url = new URL(req.url);
       const id = url.searchParams.get("id");
 
@@ -250,13 +276,13 @@ export default async (req: Request, _context: Context) => {
         await clearBookings();
       }
 
-      return json({ bookings: await listBookings() });
+      return json(req, { bookings: await listBookings() });
     }
 
-    return json({ error: "Method not allowed." }, 405);
+    return json(req, { error: "Method not allowed." }, 405);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Something went wrong.";
-    return json({ error: message }, 400);
+    return json(req, { error: message }, 400);
   }
 };
 

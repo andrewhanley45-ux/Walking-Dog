@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <rect width="1024" height="1024" rx="212" fill="#ffffff"/>
+  <rect x="56" y="56" width="912" height="912" rx="176" fill="#dff5ff"/>
+  <circle cx="512" cy="500" r="238" fill="#0598a8"/>
+  <circle cx="402" cy="318" r="70" fill="#07345d"/>
+  <circle cx="512" cy="272" r="78" fill="#07345d"/>
+  <circle cx="622" cy="318" r="70" fill="#07345d"/>
+  <ellipse cx="512" cy="578" rx="156" ry="132" fill="#07345d"/>
+  <text x="512" y="854" fill="#07345d" font-family="Arial, Helvetica, sans-serif" font-size="126" font-weight="900" text-anchor="middle">WALKING PAW</text>
+</svg>

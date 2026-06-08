@@ -17,7 +17,10 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
-const BOOKINGS_API = "/api/bookings";
+const LIVE_SITE_URL = "https://walking-paw.netlify.app";
+const isNetlifyHost = window.location.hostname.endsWith(".netlify.app");
+const BOOKINGS_API =
+  isNetlifyHost ? "/api/bookings" : `${LIVE_SITE_URL}/api/bookings`;
 const ADMIN_PASSWORD_SESSION_KEY = "walking-paw-admin-password";
 
 const serviceSchedule = {
@@ -70,7 +73,7 @@ const navItems = [
   { id: "terms", label: "Terms" }
 ];
 
-const pageIds = new Set([...navItems.map((item) => item.id), "thanks"]);
+const pageIds = new Set([...navItems.map((item) => item.id), "thanks", "privacy"]);
 
 const emptyForm = {
   ownerName: "",
@@ -87,6 +90,9 @@ const emptyForm = {
 };
 
 function getPageFromHash() {
+  const path = window.location.pathname.replace(/\/$/, "");
+  if (path === "/privacy") return "privacy";
+
   const hash = window.location.hash.replace("#", "");
   return pageIds.has(hash) ? hash : "home";
 }
@@ -272,6 +278,9 @@ function App() {
   }, [adminSite, adminPassword]);
 
   function navigate(page) {
+    if (window.location.pathname !== "/" && !isAdminPath()) {
+      window.history.pushState({}, "", "/");
+    }
     window.location.hash = page;
     setActivePage(page);
     setMenuOpen(false);
@@ -431,6 +440,7 @@ function App() {
         )}
         {activePage === "policies" && <PoliciesPage onBookNow={() => navigate("book")} />}
         {activePage === "terms" && <TermsPage onBookNow={() => navigate("book")} />}
+        {activePage === "privacy" && <PrivacyPage onBookNow={() => navigate("book")} />}
       </main>
 
       <SiteFooter onNavigate={navigate} />
@@ -972,7 +982,7 @@ function BookingsPage({
           <p>
             {admin
               ? "Password-protected view for booked dogs, pickup times, owner contacts, and Beaumont-side locations."
-              : "These bookings are saved on this browser for Walking Paw Service. Add a booking from the form and it appears here."}
+              : "These bookings are saved to the shared Walking Paw booking list. Add a booking from the form and it appears here."}
           </p>
         </div>
         <button className="primary-button" type="button" onClick={onBookNow}>
@@ -1110,7 +1120,7 @@ function PoliciesPage({ onBookNow }) {
         />
         <LegalBlock
           title="Pricing"
-          text="Small dogs are $5 and big dogs are $10 per booked walk slot. The price shown on the booking form is the amount for that booking."
+          text="Small dogs are $5 and big dogs are $10 per booked walk slot. The price shown on the booking form is the cash-only amount for that booking."
         />
         <LegalBlock
           title="Schedule"
@@ -1156,8 +1166,9 @@ function TermsPage({ onBookNow }) {
             a suitable leash, collar, harness, or other normal walking equipment.
           </li>
           <li>
-            The listed prices are $5 for small dogs and $10 for big dogs. Payment and
-            final walk details are handled directly with Walking Paw Service.
+            The listed prices are $5 for small dogs and $10 for big dogs. Payment is
+            cash only, and final walk details are handled directly with Walking Paw
+            Service.
           </li>
           <li>
             Walking Paw Service may decline, cancel, or reschedule a walk when the
@@ -1174,10 +1185,48 @@ function TermsPage({ onBookNow }) {
             contacted immediately.
           </li>
           <li>
-            Booking records are stored in this browser for this website version. Do
-            not enter private information that should not be saved on this computer.
+            Booking records are stored in the shared Walking Paw booking system so
+            workers and bosses can see walk requests from different devices.
           </li>
         </ol>
+      </div>
+
+      <button className="primary-button legal-cta" type="button" onClick={onBookNow}>
+        <CalendarCheck size={20} />
+        Book a Walk
+      </button>
+    </section>
+  );
+}
+
+function PrivacyPage({ onBookNow }) {
+  return (
+    <section className="page-wrap legal-page">
+      <div className="page-intro">
+        <h1>Privacy</h1>
+        <p>
+          Walking Paw Service collects only the booking details needed to schedule
+          and manage Beaumont-side dog walks.
+        </p>
+      </div>
+
+      <div className="legal-grid">
+        <LegalBlock
+          title="Information Collected"
+          text="Booking forms collect owner name, dog name, dog size, phone number, optional email, Beaumont-side address or meet spot, selected walk date and time, service area, and optional notes."
+        />
+        <LegalBlock
+          title="How It Is Used"
+          text="Booking information is used to contact the owner, confirm walk details, plan pickup, and manage the worker and boss booking list."
+        />
+        <LegalBlock
+          title="Storage"
+          text="Bookings are stored in the shared Walking Paw backend on Netlify. The admin page is password protected, and workers or bosses can delete bookings when they are no longer needed."
+        />
+        <LegalBlock
+          title="No Selling"
+          text="Walking Paw Service does not sell booking information. Contact details are used only for dog walking communication and scheduling."
+        />
       </div>
 
       <button className="primary-button legal-cta" type="button" onClick={onBookNow}>
@@ -1204,6 +1253,9 @@ function SiteFooter({ onNavigate }) {
         </button>
         <button type="button" onClick={() => onNavigate("terms")}>
           Terms
+        </button>
+        <button type="button" onClick={() => onNavigate("privacy")}>
+          Privacy
         </button>
       </div>
     </footer>
