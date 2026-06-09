@@ -52,7 +52,7 @@ npm run ios:open
 Required:
 
 - Google Play Console developer account
-- JDK 17 or newer
+- JDK 21 or newer
 - Android Studio with Android SDK installed
 - Upload signing key or Play App Signing setup
 
@@ -112,4 +112,4 @@ Store listing fields to prepare:
 
 ## Current Local Toolchain Limitation
 
-This Windows machine currently has Java 8 and no Android SDK in PATH. Android Gradle requires Java 11 or newer, and JDK 17 is recommended. iOS cannot be built or submitted from Windows; final iOS submission requires macOS and Xcode.
+This Windows machine currently has Java 8 and no Android SDK in PATH. This Capacitor Android project targets Java 21. iOS cannot be built or submitted from Windows; final iOS submission requires macOS and Xcode.
