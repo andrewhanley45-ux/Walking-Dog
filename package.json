@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "vite build",
+    "qr:generate": "node scripts/generate-qr.mjs",
     "mobile:sync": "npm run build && cap sync",
     "android:open": "cap open android",
     "ios:open": "cap open ios",
@@ -25,6 +26,7 @@
     "@capacitor/cli": "^8.4.0",
     "@capacitor/ios": "^8.4.0",
     "@vitejs/plugin-react": "^6.0.2",
+    "qrcode": "^1.5.4",
     "vite": "^8.0.16"
   }
 }

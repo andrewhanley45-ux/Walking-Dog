@@ -73,7 +73,7 @@ const navItems = [
   { id: "terms", label: "Terms" }
 ];
 
-const pageIds = new Set([...navItems.map((item) => item.id), "thanks", "privacy"]);
+const pageIds = new Set([...navItems.map((item) => item.id), "thanks", "privacy", "qr"]);
 
 const emptyForm = {
   ownerName: "",
@@ -92,6 +92,7 @@ const emptyForm = {
 function getPageFromHash() {
   const path = window.location.pathname.replace(/\/$/, "");
   if (path === "/privacy") return "privacy";
+  if (path === "/qr") return "qr";
 
   const hash = window.location.hash.replace("#", "");
   return pageIds.has(hash) ? hash : "home";
@@ -441,6 +442,7 @@ function App() {
         {activePage === "policies" && <PoliciesPage onBookNow={() => navigate("book")} />}
         {activePage === "terms" && <TermsPage onBookNow={() => navigate("book")} />}
         {activePage === "privacy" && <PrivacyPage onBookNow={() => navigate("book")} />}
+        {activePage === "qr" && <QrCodePage onBookNow={() => navigate("book")} />}
       </main>
 
       <SiteFooter onNavigate={navigate} />
@@ -1237,6 +1239,47 @@ function PrivacyPage({ onBookNow }) {
   );
 }
 
+function QrCodePage({ onBookNow }) {
+  return (
+    <section className="page-wrap qr-page">
+      <div className="page-intro">
+        <h1>Walking Paw QR Code</h1>
+        <p>
+          Print this code or share it on a flyer. Scanning it opens the Walking
+          Paw booking website.
+        </p>
+      </div>
+
+      <div className="qr-layout">
+        <div className="qr-card">
+          <img
+            src="/walking-paw-qr.svg"
+            alt="QR code linking to the Walking Paw booking website"
+          />
+        </div>
+        <div className="qr-actions-panel">
+          <h2>Scan to Book</h2>
+          <p>QR destination: https://walking-paw.netlify.app/</p>
+          <div className="confirmation-actions">
+            <a className="primary-button" href="/walking-paw-qr.png" download>
+              <Download size={20} />
+              Download PNG
+            </a>
+            <a className="secondary-button" href="/walking-paw-qr.svg" download>
+              <Download size={20} />
+              Download SVG
+            </a>
+            <button className="secondary-button" type="button" onClick={onBookNow}>
+              <CalendarCheck size={20} />
+              Book a Walk
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function SiteFooter({ onNavigate }) {
   return (
     <footer className="site-footer">
@@ -1256,6 +1299,9 @@ function SiteFooter({ onNavigate }) {
         </button>
         <button type="button" onClick={() => onNavigate("privacy")}>
           Privacy
+        </button>
+        <button type="button" onClick={() => onNavigate("qr")}>
+          QR Code
         </button>
       </div>
     </footer>

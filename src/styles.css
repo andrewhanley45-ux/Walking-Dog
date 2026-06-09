@@ -976,6 +976,54 @@ textarea:focus {
   margin-top: 22px;
 }
 
+.qr-layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 440px) minmax(0, 1fr);
+  gap: 24px;
+  align-items: stretch;
+}
+
+.qr-card,
+.qr-actions-panel {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #fff;
+  box-shadow: var(--shadow);
+}
+
+.qr-card {
+  display: grid;
+  place-items: center;
+  padding: clamp(18px, 4vw, 34px);
+}
+
+.qr-card img {
+  width: min(100%, 360px);
+  aspect-ratio: 1;
+  display: block;
+}
+
+.qr-actions-panel {
+  display: grid;
+  align-content: center;
+  gap: 16px;
+  padding: clamp(22px, 4vw, 38px);
+}
+
+.qr-actions-panel h2 {
+  color: var(--navy);
+  font-size: clamp(2rem, 5vw, 4rem);
+  font-weight: 950;
+  line-height: 1;
+}
+
+.qr-actions-panel p {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+  font-weight: 700;
+  line-height: 1.55;
+}
+
 .terms-panel {
   padding: clamp(18px, 3vw, 34px);
 }
@@ -1095,7 +1143,8 @@ textarea:focus {
 
   .service-list,
   .schedule-location,
-  .legal-grid {
+  .legal-grid,
+  .qr-layout {
     grid-template-columns: 1fr;
   }
 
