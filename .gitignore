@@ -2,6 +2,7 @@ node_modules/
 dist/
 .netlify/
 .netlify-functions-build/
+.wrangler/
 __pycache__/
 *.pyc
 design/qa-*.png

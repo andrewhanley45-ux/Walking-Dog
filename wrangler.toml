@@ -1,0 +1,9 @@
+name = "walking-paw"
+compatibility_date = "2026-06-13"
+pages_build_output_dir = "dist"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "walking-paw-bookings"
+database_id = "04b26cc0-8c5d-4cb4-9ed7-030657ba3b66"
+migrations_dir = "migrations"

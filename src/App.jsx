@@ -17,10 +17,12 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
-const LIVE_SITE_URL = "https://walking-paw.netlify.app";
-const isNetlifyHost = window.location.hostname.endsWith(".netlify.app");
+const PUBLIC_SITE_URL = "https://walking-paw.pages.dev";
+const isLocalApp =
+  ["127.0.0.1", "localhost"].includes(window.location.hostname) ||
+  window.location.protocol === "capacitor:";
 const BOOKINGS_API =
-  isNetlifyHost ? "/api/bookings" : `${LIVE_SITE_URL}/api/bookings`;
+  isLocalApp ? `${PUBLIC_SITE_URL}/api/bookings` : "/api/bookings";
 const ADMIN_PASSWORD_SESSION_KEY = "walking-paw-admin-password";
 
 const serviceSchedule = {
@@ -1259,7 +1261,7 @@ function QrCodePage({ onBookNow }) {
         </div>
         <div className="qr-actions-panel">
           <h2>Scan to Book</h2>
-          <p>QR destination: https://walking-paw.netlify.app/</p>
+          <p>QR destination: {PUBLIC_SITE_URL}/</p>
           <div className="confirmation-actions">
             <a className="primary-button" href="/walking-paw-qr.png" download>
               <Download size={20} />

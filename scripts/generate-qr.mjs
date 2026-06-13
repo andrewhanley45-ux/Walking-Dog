@@ -2,7 +2,7 @@ import { mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import QRCode from "qrcode";
 
-const targetUrl = "https://walking-paw.netlify.app/";
+const targetUrl = process.env.WALKING_PAW_SITE_URL || "https://walking-paw.pages.dev/";
 const outputDir = new URL("../public/", import.meta.url);
 
 await mkdir(outputDir, { recursive: true });

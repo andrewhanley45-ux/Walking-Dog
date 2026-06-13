@@ -1,7 +1,3 @@
-import { getStore } from "@netlify/blobs";
-import type { Config, Context } from "@netlify/functions";
-import { randomUUID } from "node:crypto";
-
 type BookingPayload = Record<string, unknown>;
 
 type Booking = {
@@ -26,15 +22,29 @@ type Booking = {
   createdAt: string;
 };
 
-declare const Netlify: {
-  env: {
-    get(name: string): string | undefined;
-  };
+type D1PreparedStatement = {
+  bind(...values: unknown[]): D1PreparedStatement;
+  all<T = Record<string, unknown>>(): Promise<{ results?: T[] }>;
+  run(): Promise<unknown>;
 };
 
-const STORE_NAME = "walking-paw-bookings";
-const BOOKING_PREFIX = "booking-";
+type D1Database = {
+  prepare(query: string): D1PreparedStatement;
+  exec(query: string): Promise<unknown>;
+};
+
+type Env = {
+  DB?: D1Database;
+  ADMIN_PASSWORD?: string;
+};
+
+type PagesContext = {
+  request: Request;
+  env: Env;
+};
+
 const ALLOWED_ORIGINS = new Set([
+  "https://walking-paw.pages.dev",
   "https://walking-paw.netlify.app",
   "https://localhost",
   "http://localhost",
@@ -87,9 +97,21 @@ const priceBySize = {
   big: 10
 } as const;
 
+let schemaReady: Promise<void> | null = null;
+
+function isAllowedOrigin(origin: string) {
+  if (ALLOWED_ORIGINS.has(origin)) return true;
+  try {
+    const { protocol, hostname } = new URL(origin);
+    return protocol === "https:" && hostname.endsWith(".walking-paw.pages.dev");
+  } catch {
+    return false;
+  }
+}
+
 function corsHeaders(req: Request) {
   const origin = req.headers.get("origin") || "";
-  if (!ALLOWED_ORIGINS.has(origin)) return {};
+  if (!origin || !isAllowedOrigin(origin)) return {};
 
   return {
     "Access-Control-Allow-Origin": origin,
@@ -100,23 +122,51 @@ function corsHeaders(req: Request) {
 }
 
 function json(req: Request, data: unknown, status = 200) {
-  return Response.json(data, { status, headers: corsHeaders(req) });
+  return Response.json(data, {
+    status,
+    headers: {
+      ...corsHeaders(req),
+      "Cache-Control": "no-store"
+    }
+  });
 }
 
 function empty(req: Request, status = 204) {
   return new Response(null, { status, headers: corsHeaders(req) });
 }
 
-function getBookingsStore() {
-  return getStore({ name: STORE_NAME, consistency: "strong" });
+function getDb(env: Env) {
+  if (!env.DB) {
+    throw new Error("Cloudflare D1 database is not connected yet.");
+  }
+  return env.DB;
 }
 
-function getAdminPassword() {
-  return Netlify.env.get("ADMIN_PASSWORD") || "";
+function ensureSchema(db: D1Database) {
+  schemaReady ||= Promise.all([
+    db
+      .prepare(
+        `CREATE TABLE IF NOT EXISTS bookings (
+        id TEXT PRIMARY KEY,
+        created_at TEXT NOT NULL,
+        data TEXT NOT NULL
+      )`
+      )
+      .run(),
+    db
+      .prepare("CREATE INDEX IF NOT EXISTS bookings_created_at_idx ON bookings (created_at DESC)")
+      .run()
+  ])
+    .then(() => undefined);
+  return schemaReady;
 }
 
-function isAdminRequest(req: Request) {
-  const configuredPassword = getAdminPassword();
+function getAdminPassword(env: Env) {
+  return env.ADMIN_PASSWORD || "";
+}
+
+function isAdminRequest(req: Request, env: Env) {
+  const configuredPassword = getAdminPassword(env);
   const providedPassword = req.headers.get("x-admin-password") || "";
   return Boolean(configuredPassword) && providedPassword === configuredPassword;
 }
@@ -138,10 +188,10 @@ function minutesFromTime(timeValue: string) {
 }
 
 function formatPickupTime(timeValue: string) {
-  return new Intl.DateTimeFormat("en-US", {
-    hour: "numeric",
-    minute: "2-digit"
-  }).format(new Date(`2026-01-01T${timeValue}:00`));
+  const [hours, minutes] = timeValue.split(":").map(Number);
+  const displayHour = hours % 12 || 12;
+  const period = hours >= 12 ? "PM" : "AM";
+  return `${displayHour}:${String(minutes).padStart(2, "0")} ${period}`;
 }
 
 function validatePickupTime(day: string, timeValue: string) {
@@ -197,7 +247,7 @@ function buildBooking(payload: BookingPayload): Booking {
   }
 
   return {
-    id: randomUUID(),
+    id: crypto.randomUUID(),
     ownerName,
     dogName,
     dogSize,
@@ -219,73 +269,82 @@ function buildBooking(payload: BookingPayload): Booking {
   };
 }
 
-async function listBookings() {
-  const store = getBookingsStore();
-  const { blobs } = await store.list({ prefix: BOOKING_PREFIX });
-  const bookings = await Promise.all(
-    blobs.map(({ key }) => store.get(key, { consistency: "strong", type: "json" }))
-  );
+async function listBookings(db: D1Database) {
+  const { results = [] } = await db
+    .prepare("SELECT data FROM bookings ORDER BY created_at DESC")
+    .all<{ data: string }>();
 
-  return bookings
-    .filter((booking): booking is Booking => Boolean(booking))
-    .sort((first, second) => second.createdAt.localeCompare(first.createdAt));
+  return results
+    .map(({ data }) => {
+      try {
+        return JSON.parse(data) as Booking;
+      } catch {
+        return null;
+      }
+    })
+    .filter((booking): booking is Booking => Boolean(booking));
 }
 
-async function saveBooking(payload: BookingPayload) {
-  const store = getBookingsStore();
+async function saveBooking(db: D1Database, payload: BookingPayload) {
   const booking = buildBooking(payload);
-  await store.setJSON(`${BOOKING_PREFIX}${booking.id}`, booking);
+  await db
+    .prepare("INSERT INTO bookings (id, created_at, data) VALUES (?, ?, ?)")
+    .bind(booking.id, booking.createdAt, JSON.stringify(booking))
+    .run();
   return booking;
 }
 
-async function deleteBooking(id: string) {
-  const store = getBookingsStore();
-  await store.delete(`${BOOKING_PREFIX}${id}`);
+async function deleteBooking(db: D1Database, id: string) {
+  await db.prepare("DELETE FROM bookings WHERE id = ?").bind(id).run();
 }
 
-async function clearBookings() {
-  const store = getBookingsStore();
-  const { blobs } = await store.list({ prefix: BOOKING_PREFIX });
-  await Promise.all(blobs.map(({ key }) => store.delete(key)));
+async function clearBookings(db: D1Database) {
+  await db.prepare("DELETE FROM bookings").run();
 }
 
-export default async (req: Request, _context: Context) => {
+export async function onRequest(context: PagesContext) {
+  const { request, env } = context;
+
   try {
-    if (req.method === "OPTIONS") {
-      return empty(req);
+    if (request.method === "OPTIONS") {
+      return empty(request);
     }
 
-    if (req.method === "POST") {
-      const booking = await saveBooking(await req.json());
-      return json(req, { booking }, 201);
+    const db = getDb(env);
+    await ensureSchema(db);
+
+    if (request.method === "POST") {
+      const booking = await saveBooking(db, await request.json());
+      return json(request, { booking }, 201);
     }
 
-    if (req.method === "GET") {
-      if (!isAdminRequest(req)) return json(req, { error: "Wrong admin password." }, 401);
-      return json(req, { bookings: await listBookings() });
+    if (request.method === "GET") {
+      if (!isAdminRequest(request, env)) {
+        return json(request, { error: "Wrong admin password." }, 401);
+      }
+      return json(request, { bookings: await listBookings(db) });
     }
 
-    if (req.method === "DELETE") {
-      if (!isAdminRequest(req)) return json(req, { error: "Wrong admin password." }, 401);
-      const url = new URL(req.url);
+    if (request.method === "DELETE") {
+      if (!isAdminRequest(request, env)) {
+        return json(request, { error: "Wrong admin password." }, 401);
+      }
+
+      const url = new URL(request.url);
       const id = url.searchParams.get("id");
 
       if (id) {
-        await deleteBooking(id);
+        await deleteBooking(db, id);
       } else {
-        await clearBookings();
+        await clearBookings(db);
       }
 
-      return json(req, { bookings: await listBookings() });
+      return json(request, { bookings: await listBookings(db) });
     }
 
-    return json(req, { error: "Method not allowed." }, 405);
+    return json(request, { error: "Method not allowed." }, 405);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Something went wrong.";
-    return json(req, { error: message }, 400);
+    return json(request, { error: message }, 400);
   }
-};
-
-export const config: Config = {
-  path: "/api/bookings"
-};
+}
