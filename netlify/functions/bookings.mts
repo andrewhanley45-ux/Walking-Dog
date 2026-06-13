@@ -112,7 +112,7 @@ function getBookingsStore() {
 }
 
 function getAdminPassword() {
-  return Netlify.env.get("ADMIN_PASSWORD") || "admin123";
+  return Netlify.env.get("ADMIN_PASSWORD") || "donut";
 }
 
 function isAdminRequest(req: Request) {
